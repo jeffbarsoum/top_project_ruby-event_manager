@@ -7,6 +7,24 @@ def clean_zipcode zipcode
   zipcode.to_s.rjust(5, '0')
 end
 
+def clean_phone_number number
+  return nil unless number
+  # these two lines catch the case where the number was recorded as a float
+  is_float = !!Float(number) rescue false
+  number = number.to_f.to_s if is_float
+  # delete all extraneous characters to standardize number format for processing
+  number = number.to_s.delete("()").delete("-").delete(" ").delete(".")
+  #return 10 digit number without the leading 1, nil if not 10 or 11 digits
+  case number.length
+  when 10
+    return "(#{number[0..2]}) #{number[3..5]}-#{number[6..9]}"
+  when 11 && number[0] == 1
+    return "(#{number[1..3]}) #{number[4..6]}-#{number[7..10]}"
+  else
+    nil
+  end
+end
+
 def legislators_by_zipcode(zip)
   civic_info = Google::Apis::CivicinfoV2::CivicInfoService.new
   civic_info.key = File.read('secret.key').strip
@@ -55,6 +73,7 @@ lines.each_with_index do |line, i|
   form_letter = erb_template.result(binding)
   # puts form_letter
   puts "\t#{save_thank_you_letter(id, form_letter)} for #{name} #{line[:last_name]} created..."
+  puts "\t\t#{clean_phone_number(line[:homephone])}"
 end
 
 puts 'Event Manager Complete!'
