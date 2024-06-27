@@ -1,6 +1,7 @@
 require 'csv'
 require 'google/apis/civicinfo_v2'
 require 'erb'
+require 'date'
 
 
 def clean_zipcode zipcode
@@ -53,14 +54,41 @@ def save_thank_you_letter(id, form_letter)
   filename
 end
 
+def open_csv(filename)
+  CSV.open(
+    filename,
+    headers: true,
+    header_converters: :symbol
+  )
+end
+
+def csv_reduce(filename, initial_accumulator = 0, skip_headers = true, &block)
+  result = initial_accumulator
+  File.open(filename).each_with_index do |line, line_num|
+    next if skip_headers && line_num == 0
+    result = yield(result, line.split(","))
+  end
+  result
+end
+
+def registration_by_hour(filename)
+  result_arr = []
+  result = csv_reduce('event_attendees.csv', Hash.new(0), true) do |hash, line|
+    date = DateTime.strptime(line[1], '%m/%d/%y %k:%M')
+    hr = date.strftime("%I:00 %p")
+    hash[hr] += 1
+    hash
+  end
+  result.each { |hr, cnt| result_arr << "#{hr} - #{cnt} registrations" }
+  result_arr.sort.each { |hr_result| puts hr_result }
+end
+
+
 
 puts 'Event Manager Initialized!'
 
-lines = CSV.open(
-  'event_attendees.csv',
-  headers: true,
-  header_converters: :symbol
-)
+filename = 'event_attendees.csv'
+lines = open_csv(filename)
 
 template_letter = File.read('form_letter.erb')
 erb_template = ERB.new template_letter
@@ -75,5 +103,6 @@ lines.each_with_index do |line, i|
   puts "\t#{save_thank_you_letter(id, form_letter)} for #{name} #{line[:last_name]} created..."
   puts "\t\t#{clean_phone_number(line[:homephone])}"
 end
+registration_by_hour(filename)
 
 puts 'Event Manager Complete!'
